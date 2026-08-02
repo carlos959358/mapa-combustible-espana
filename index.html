@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gasolina Barata en España | Precio Combustible</title>
+  <meta name="description"
+    content="Encuentra la gasolinera más barata cerca de ti. Compara en tiempo real el precio de gasolina, diésel y GLP en Madrid, Barcelona, Valencia y toda España." />
+  <meta name="robots" content="index, follow" />
+  <!-- TODO: sustituye REEMPLAZA-CON-TU-DOMINIO por el dominio real una vez publicada la web -->
+  <link rel="canonical" href="https://REEMPLAZA-CON-TU-DOMINIO.es/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="es_ES" />
+  <meta property="og:site_name" content="Precio Combustible España" />
+  <meta property="og:title" content="Gasolina Barata en España | Precio Combustible" />
+  <meta property="og:description"
+    content="Mapa en tiempo real con el precio de gasolina, diésel y GLP en todas las gasolineras de España. Compara y ahorra en cada repostaje." />
+  <meta property="og:url" content="https://REEMPLAZA-CON-TU-DOMINIO.es/" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Gasolina Barata en España | Precio Combustible" />
+  <meta name="twitter:description"
+    content="Mapa en tiempo real con el precio de gasolina, diésel y GLP en todas las gasolineras de España." />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Precio Combustible España",
+    "description": "Mapa en tiempo real del precio de combustibles (gasolina, diésel, GLP y más) en las gasolineras de España, con datos oficiales del Gobierno de España.",
+    "applicationCategory": "UtilityApplication",
+    "operatingSystem": "Cualquiera (navegador web)",
+    "inLanguage": "es",
+    "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "EUR"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "¿Cómo encuentro la gasolinera más barata cerca de mí?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Pulsa \"Usar mi ubicación\" para centrar el mapa donde estás y consulta el aviso \"Más barata (en el mapa)\": muestra siempre la estación con el precio más bajo dentro de lo que ves en pantalla. Los colores de los puntos (verde a rojo) también indican de un vistazo qué gasolineras son más económicas."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Cada cuánto se actualizan los precios?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Los precios se actualizan cada media hora, tal y como indica la propia API pública de Precios de Carburantes del Gobierno de España de la que se nutre este mapa."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "¿De dónde proceden los datos de precios?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "De la API pública y oficial de Precios de Carburantes del Gobierno de España, que recoge los precios que cada gasolinera está obligada a declarar."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Es gratis usar este mapa de gasolineras?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Sí, el mapa es gratuito y no requiere registro ni instalación."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Qué combustibles puedo comparar?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Gasolina 95 y 98 (en sus variantes E5, E10...), gasóleo A, B y Premium, GLP, gas natural, hidrógeno y otros combustibles alternativos, según lo que venda cada estación."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Inter:wght@400;500;600&family=Public+Sans:wght@400;600&display=swap" />
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@24,300,0&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    integrity="sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <h1>Precio Combustible <span>España</span></h1>
+      <div id="status-bar">
+        <span id="result-count"></span>
+        <span id="last-update"></span>
+        <button id="refresh-btn" title="Recargar precios">
+          <span class="material-symbols-outlined">refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <div id="body">
+      <aside id="sidebar">
+        <div class="filter-group">
+          <label for="f-fuel">Combustible</label>
+          <select id="f-fuel"></select>
+        </div>
+
+        <div class="filter-group">
+          <label for="f-ccaa">Comunidad Autónoma</label>
+          <select id="f-ccaa">
+            <option value="">Todas</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="f-provincia">Provincia</label>
+          <select id="f-provincia">
+            <option value="">Todas</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="f-municipio">Municipio</label>
+          <input id="f-municipio" list="municipio-list" placeholder="Todos" autocomplete="off" />
+          <datalist id="municipio-list"></datalist>
+        </div>
+
+        <div class="filter-group">
+          <label>Precio (€/L)</label>
+          <div class="range-row">
+            <input id="f-price-min" type="number" step="0.001" min="0" placeholder="min" />
+            <span>–</span>
+            <input id="f-price-max" type="number" step="0.001" min="0" placeholder="max" />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label for="f-search">Buscar (marca)</label>
+          <input id="f-search" list="rotulo-list" type="search" placeholder="p.ej. Repsol, Cepsa..." autocomplete="off" />
+          <datalist id="rotulo-list"></datalist>
+        </div>
+
+        <div class="filter-group">
+          <button id="f-geoloc" class="btn-secondary">
+            <span class="material-symbols-outlined">my_location</span>
+            Usar mi ubicación
+          </button>
+        </div>
+
+        <div class="filter-group">
+          <button id="f-reset" class="btn-text">Limpiar filtros</button>
+        </div>
+
+        <div id="cheapest-box" class="filter-group"></div>
+
+        <div id="legend" class="filter-group">
+          <label>Leyenda de precio</label>
+          <div id="legend-scale"></div>
+          <div id="legend-labels"><span id="legend-min"></span><span id="legend-max"></span></div>
+        </div>
+      </aside>
+
+      <main id="map-container">
+        <div id="map"></div>
+        <div id="loading-overlay">
+          <div class="spinner"></div>
+          <p>Cargando estaciones de servicio…</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <footer id="seo-content">
+    <section>
+      <h2>Gasolina barata en España: compara antes de repostar</h2>
+      <p>
+        Este mapa cruza los datos oficiales del Gobierno de España para mostrarte,
+        en tiempo real, dónde está la <strong>gasolina más barata cerca de ti</strong>.
+        Compara el precio de la gasolina 95, la gasolina 98, el gasóleo A, el gasóleo B,
+        el GLP y otros combustibles en miles de gasolineras de todo el país, filtra por
+        comunidad autónoma, provincia o municipio, y ahorra en cada repostaje sin tener
+        que ir mirando cartel por cartel.
+      </p>
+    </section>
+
+    <section>
+      <h2>Precio de la gasolina por ciudades</h2>
+      <p>Consulta el precio del combustible hoy en las principales ciudades españolas:</p>
+      <ul id="city-links">
+        <li><a href="?municipio=Madrid">Gasolina barata en Madrid</a></li>
+        <li><a href="?municipio=Barcelona">Gasolina barata en Barcelona</a></li>
+        <li><a href="?municipio=Valencia">Gasolina barata en Valencia</a></li>
+        <li><a href="?municipio=Sevilla">Gasolina barata en Sevilla</a></li>
+        <li><a href="?municipio=Zaragoza">Gasolina barata en Zaragoza</a></li>
+        <li><a href="?municipio=Malaga">Gasolina barata en Málaga</a></li>
+        <li><a href="?municipio=Murcia">Gasolina barata en Murcia</a></li>
+        <li><a href="?municipio=Palma">Gasolina barata en Palma de Mallorca</a></li>
+        <li><a href="?municipio=Las Palmas">Gasolina barata en Las Palmas de Gran Canaria</a></li>
+        <li><a href="?municipio=Bilbao">Gasolina barata en Bilbao</a></li>
+        <li><a href="?municipio=Alicante">Gasolina barata en Alicante</a></li>
+        <li><a href="?municipio=Cordoba">Gasolina barata en Córdoba</a></li>
+        <li><a href="?municipio=Valladolid">Gasolina barata en Valladolid</a></li>
+        <li><a href="?municipio=Vigo">Gasolina barata en Vigo</a></li>
+        <li><a href="?municipio=Gijon">Gasolina barata en Gijón</a></li>
+        <li><a href="?municipio=Coruna">Gasolina barata en A Coruña</a></li>
+        <li><a href="?municipio=Granada">Gasolina barata en Granada</a></li>
+        <li><a href="?municipio=Vitoria">Gasolina barata en Vitoria-Gasteiz</a></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Preguntas frecuentes</h2>
+
+      <h3>¿Cómo encuentro la gasolinera más barata cerca de mí?</h3>
+      <p>
+        Pulsa "Usar mi ubicación" para centrar el mapa donde estás y consulta el aviso
+        "Más barata (en el mapa)": muestra siempre la estación con el precio más bajo
+        dentro de lo que ves en pantalla. Los colores de los puntos (verde a rojo)
+        también indican de un vistazo qué gasolineras son más económicas.
+      </p>
+
+      <h3>¿Cada cuánto se actualizan los precios?</h3>
+      <p>
+        Los precios se actualizan cada media hora, tal y como indica la propia API
+        pública de Precios de Carburantes del Gobierno de España de la que se nutre
+        este mapa.
+      </p>
+
+      <h3>¿De dónde proceden los datos de precios?</h3>
+      <p>
+        De la API pública y oficial de Precios de Carburantes del Gobierno de España,
+        que recoge los precios que cada gasolinera está obligada a declarar.
+      </p>
+
+      <h3>¿Es gratis usar este mapa de gasolineras?</h3>
+      <p>Sí, el mapa es gratuito y no requiere registro ni instalación.</p>
+
+      <h3>¿Qué combustibles puedo comparar?</h3>
+      <p>
+        Gasolina 95 y 98 (en sus variantes E5, E10...), gasóleo A, B y Premium, GLP,
+        gas natural, hidrógeno y otros combustibles alternativos, según lo que venda
+        cada estación.
+      </p>
+    </section>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+    integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

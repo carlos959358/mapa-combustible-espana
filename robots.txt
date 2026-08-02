@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# TODO: reemplaza REEMPLAZA-CON-TU-DOMINIO por el dominio real una vez publicada la web
+Sitemap: https://REEMPLAZA-CON-TU-DOMINIO.es/sitemap.xml
