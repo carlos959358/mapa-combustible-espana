@@ -63,7 +63,9 @@ export function buildPopupHtml(station, productos, selectedProductId, status) {
   const hint =
     status === "loading"
       ? `<div class="popup-hint">Cargando el resto de precios de esta estación…</div>`
-      : "";
+      : status === "error"
+        ? `<div class="popup-hint">No se pudo cargar el resto de precios.</div>`
+        : "";
 
   return `
     <div class="station-popup">

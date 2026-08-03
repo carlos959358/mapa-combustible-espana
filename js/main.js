@@ -24,6 +24,7 @@ import {
   formatDateDDMMYYYY,
   parseEsNumber,
   runWithConcurrency,
+  haversineKm,
 } from "./utils.js";
 import { renderPriceHistoryChart } from "./chart.js";
 
@@ -40,13 +41,22 @@ const els = {
   geoloc: document.getElementById("f-geoloc"),
   reset: document.getElementById("f-reset"),
   cheapestBox: document.getElementById("cheapest-box"),
+  nearestBox: document.getElementById("nearest-box"),
   legendMin: document.getElementById("legend-min"),
   legendMax: document.getElementById("legend-max"),
   resultCount: document.getElementById("result-count"),
   lastUpdate: document.getElementById("last-update"),
   refreshBtn: document.getElementById("refresh-btn"),
   loadingOverlay: document.getElementById("loading-overlay"),
+  fuelLoadingIndicator: document.getElementById("fuel-loading-indicator"),
   sidebar: document.getElementById("sidebar"),
+  sidebarToggle: document.getElementById("sidebar-toggle"),
+  sidebarBackdrop: document.getElementById("sidebar-backdrop"),
+  errorBanner: document.getElementById("error-banner"),
+  errorBannerText: document.getElementById("error-banner-text"),
+  errorBannerRetry: document.getElementById("error-banner-retry"),
+  emptyState: document.getElementById("empty-state"),
+  emptyStateReset: document.getElementById("empty-state-reset"),
   historyToggle: document.getElementById("history-toggle"),
   historyPanel: document.getElementById("history-panel"),
   historyRange7: document.getElementById("history-range-7"),
@@ -78,6 +88,10 @@ let clusterGroup = null;
 let lastFiltered = [];
 let lastFuelId = "";
 
+// Last successful geolocation fix, used to keep the "nearest station" box in
+// sync as the user changes fuel/filters after granting location access.
+let lastGeoPos = null;
+
 // Historical average-price chart state. Cached per "fuelId:rangeDays" so
 // toggling the range back and forth, or reopening the panel, doesn't refetch.
 const HISTORY_CONCURRENCY = 6;
@@ -87,6 +101,26 @@ let historyPanelOpen = false;
 
 function setLoading(isLoading) {
   els.loadingOverlay.classList.toggle("hidden", !isLoading);
+}
+
+// Lighter-weight than setLoading: used while fetching a single fuel's data
+// so the map/sidebar stay interactive and the previous markers stay on
+// screen instead of the whole app freezing behind the full overlay.
+function setFuelLoading(isLoading) {
+  els.fuelLoadingIndicator.classList.toggle("hidden", !isLoading);
+}
+
+function showError(message, onRetry) {
+  els.errorBannerText.textContent = message;
+  els.errorBanner.classList.remove("hidden");
+  els.errorBannerRetry.onclick = () => {
+    hideError();
+    onRetry();
+  };
+}
+
+function hideError() {
+  els.errorBanner.classList.add("hidden");
 }
 
 function formatFecha(fecha) {
@@ -101,10 +135,12 @@ function currentStations() {
 
 // Fetches one fuel's nationwide station list and merges it into the shared
 // station cache. No-ops if that fuel was already fetched this session.
+// Errors propagate to the caller (runFilters) so they can be surfaced once,
+// in one place, instead of failing silently.
 async function ensureProductLoaded(productId) {
   if (!productId || loadedProductIds.has(productId)) return;
 
-  setLoading(true);
+  setFuelLoading(true);
   try {
     const res = await fetchStationsByProduct(productId);
     lastFecha = res.Fecha;
@@ -125,13 +161,15 @@ async function ensureProductLoaded(productId) {
     loadedProductIds.add(productId);
     els.lastUpdate.textContent = formatFecha(lastFecha);
   } finally {
-    setLoading(false);
+    setFuelLoading(false);
   }
 }
 
 // Fetches every fuel for every station in a province in one call and merges
 // it into the shared cache — used so clicking one station can show all of
 // its fuels without having fetched each fuel type nationwide beforehand.
+// On failure, the cached promise is dropped so the next popup open retries
+// instead of being stuck on a permanently-rejected promise.
 function ensureProvinceLoaded(idProvincia) {
   if (!idProvincia || loadedProvinceIds.has(idProvincia)) return Promise.resolve();
   if (provinceLoadPromises.has(idProvincia)) return provinceLoadPromises.get(idProvincia);
@@ -150,7 +188,10 @@ function ensureProvinceLoaded(idProvincia) {
       }
     }
     loadedProvinceIds.add(idProvincia);
-  })();
+  })().catch((err) => {
+    provinceLoadPromises.delete(idProvincia);
+    throw err;
+  });
 
   provinceLoadPromises.set(idProvincia, promise);
   return promise;
@@ -220,8 +261,13 @@ function getStationStatus(station) {
 
 async function onMarkerPopupOpen(station, marker) {
   if (loadedProvinceIds.has(station.idProvincia)) return;
-  await ensureProvinceLoaded(station.idProvincia);
-  marker.setPopupContent(buildPopupHtml(station, validProductos, lastFuelId, "complete"));
+  try {
+    await ensureProvinceLoaded(station.idProvincia);
+    marker.setPopupContent(buildPopupHtml(station, validProductos, lastFuelId, "complete"));
+  } catch (err) {
+    console.error(err);
+    marker.setPopupContent(buildPopupHtml(station, validProductos, lastFuelId, "error"));
+  }
 }
 
 function refreshMunicipioOptions() {
@@ -242,10 +288,88 @@ function refreshRotuloOptions() {
   populateRotuloDatalist(els.rotuloList, visible);
 }
 
+// Keeps the "nearest station" box in sync with the last geolocation fix and
+// the currently selected fuel. Hidden until the user has actually granted
+// location access once.
+function updateNearestBox() {
+  if (!lastGeoPos || !lastFuelId) {
+    els.nearestBox.classList.add("hidden");
+    return;
+  }
+  let nearest = null;
+  let nearestDist = Infinity;
+  for (const s of currentStations()) {
+    if (s.prices[lastFuelId] == null) continue;
+    const d = haversineKm(lastGeoPos.lat, lastGeoPos.lon, s.lat, s.lon);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = s;
+    }
+  }
+  if (!nearest) {
+    els.nearestBox.classList.add("hidden");
+    return;
+  }
+  els.nearestBox.classList.remove("hidden");
+  els.nearestBox.innerHTML = `Gasolinera más cercana: <b>${escapeHtml(nearest.rotulo)}</b><br>${formatPrice(
+    nearest.prices[lastFuelId]
+  )} · ${nearestDist.toFixed(1)} km`;
+  els.nearestBox.style.cursor = "pointer";
+  els.nearestBox.onclick = () => {
+    map.flyTo([nearest.lat, nearest.lon], 15, { duration: 0.6 });
+    map.once("moveend", () => {
+      getStationMarker(nearest.id)?.openPopup();
+    });
+  };
+}
+
+// Reads fuel/ccaa/provincia/municipio/priceMin/priceMax/search from the URL
+// so a filtered view can be bookmarked/shared, not just ?municipio=.
+function readUrlFilters() {
+  const params = new URLSearchParams(location.search);
+  return {
+    fuel: params.get("fuel")?.trim() || "",
+    ccaa: params.get("ccaa")?.trim() || "",
+    provincia: params.get("provincia")?.trim() || "",
+    municipio: params.get("municipio")?.trim() || "",
+    priceMin: params.get("priceMin")?.trim() || "",
+    priceMax: params.get("priceMax")?.trim() || "",
+    search: params.get("search")?.trim() || "",
+  };
+}
+
+function hasUrlFilters() {
+  const f = readUrlFilters();
+  return Object.values(f).some(Boolean);
+}
+
+// Mirrors the current filter state into the URL via replaceState (no new
+// history entries per keystroke) so the view can be bookmarked/shared.
+function syncUrlFromFilters(filters) {
+  const params = new URLSearchParams();
+  if (filters.fuelId) params.set("fuel", filters.fuelId);
+  if (filters.ccaaId) params.set("ccaa", filters.ccaaId);
+  if (filters.provinciaId) params.set("provincia", filters.provinciaId);
+  if (filters.municipio) params.set("municipio", filters.municipio);
+  if (filters.priceMin != null) params.set("priceMin", filters.priceMin);
+  if (filters.priceMax != null) params.set("priceMax", filters.priceMax);
+  if (filters.search) params.set("search", filters.search);
+  const qs = params.toString();
+  history.replaceState(null, "", `${location.pathname}${qs ? `?${qs}` : ""}`);
+}
+
 async function runFilters() {
   const filters = readFilters(els);
+
   if (filters.fuelId) {
-    await ensureProductLoaded(filters.fuelId);
+    try {
+      await ensureProductLoaded(filters.fuelId);
+      hideError();
+    } catch (err) {
+      console.error(err);
+      showError("No se pudieron cargar los precios. Comprueba tu conexión.", runFilters);
+      return;
+    }
   }
 
   const filtered = applyFilters(currentStations(), filters);
@@ -264,10 +388,13 @@ async function runFilters() {
   els.resultCount.textContent = `${filtered.length.toLocaleString("es")} estaciones`;
   els.legendMin.textContent = min != null ? formatPrice(min) : "";
   els.legendMax.textContent = max != null ? formatPrice(max) : "";
+  els.emptyState.classList.toggle("hidden", filtered.length !== 0);
 
   updateCheapestBox();
+  updateNearestBox();
   refreshMunicipioOptions();
   refreshRotuloOptions();
+  syncUrlFromFilters(filters);
 }
 
 // Restricted to stations currently within the map's viewport — "cheapest"
@@ -302,6 +429,30 @@ function updateCheapestBox() {
   };
 }
 
+function resetFilters() {
+  els.ccaa.value = "";
+  populateProvinciaSelect(els.provincia, provinciasList, "");
+  els.municipio.value = "";
+  els.priceMin.value = "";
+  els.priceMax.value = "";
+  els.search.value = "";
+  runFilters();
+}
+
+function closeSidebar() {
+  els.sidebar.classList.remove("open");
+  els.sidebarToggle.setAttribute("aria-expanded", "false");
+  els.sidebarToggle.querySelector(".material-symbols-outlined").textContent = "menu";
+  els.sidebarBackdrop.hidden = true;
+}
+
+function openSidebar() {
+  els.sidebar.classList.add("open");
+  els.sidebarToggle.setAttribute("aria-expanded", "true");
+  els.sidebarToggle.querySelector(".material-symbols-outlined").textContent = "close";
+  els.sidebarBackdrop.hidden = false;
+}
+
 function wireEvents() {
   els.fuel.addEventListener("change", () => {
     runFilters();
@@ -325,21 +476,16 @@ function wireEvents() {
   els.priceMax.addEventListener("input", debouncedRun);
   els.search.addEventListener("input", debouncedRun);
 
-  els.reset.addEventListener("click", () => {
-    els.ccaa.value = "";
-    populateProvinciaSelect(els.provincia, provinciasList, "");
-    els.municipio.value = "";
-    els.priceMin.value = "";
-    els.priceMax.value = "";
-    els.search.value = "";
-    runFilters();
-  });
+  els.reset.addEventListener("click", resetFilters);
+  els.emptyStateReset.addEventListener("click", resetFilters);
 
   els.geoloc.addEventListener("click", () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        map.flyTo([pos.coords.latitude, pos.coords.longitude], 13, { duration: 0.6 });
+        lastGeoPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        map.flyTo([lastGeoPos.lat, lastGeoPos.lon], 13, { duration: 0.6 });
+        updateNearestBox();
       },
       () => {
         els.cheapestBox.textContent = "No se pudo obtener tu ubicación.";
@@ -352,6 +498,15 @@ function wireEvents() {
     loadedProductIds.clear();
     runFilters();
   });
+
+  els.sidebarToggle.addEventListener("click", () => {
+    if (els.sidebar.classList.contains("open")) {
+      closeSidebar();
+    } else {
+      openSidebar();
+    }
+  });
+  els.sidebarBackdrop.addEventListener("click", closeSidebar);
 
   els.historyToggle.addEventListener("click", () => {
     historyPanelOpen = !historyPanelOpen;
@@ -370,15 +525,9 @@ function wireEvents() {
   els.historyRange30.addEventListener("click", () => setHistoryRange(30));
 }
 
-// Reads ?municipio=Madrid from the URL — lets the "Gasolina barata en <ciudad>"
-// links in the SEO content section land on a page already filtered to that
-// city instead of just a bare map.
-function readUrlMunicipio() {
-  return new URLSearchParams(location.search).get("municipio")?.trim() || "";
-}
-
 async function bootstrap() {
   setLoading(true);
+  hideError();
   try {
     const lookups = await loadLookups();
     productos = lookups.productos;
@@ -390,18 +539,28 @@ async function bootstrap() {
     populateCcaaSelect(els.ccaa, ccaaList);
     populateProvinciaSelect(els.provincia, provinciasList, "");
 
-    const urlMunicipio = readUrlMunicipio();
-    if (urlMunicipio) els.municipio.value = urlMunicipio;
+    const urlFilters = readUrlFilters();
+    if (urlFilters.fuel) els.fuel.value = urlFilters.fuel;
+    if (urlFilters.ccaa) {
+      els.ccaa.value = urlFilters.ccaa;
+      populateProvinciaSelect(els.provincia, provinciasList, urlFilters.ccaa);
+    }
+    if (urlFilters.provincia) els.provincia.value = urlFilters.provincia;
+    if (urlFilters.municipio) els.municipio.value = urlFilters.municipio;
+    if (urlFilters.priceMin) els.priceMin.value = urlFilters.priceMin;
+    if (urlFilters.priceMax) els.priceMax.value = urlFilters.priceMax;
+    if (urlFilters.search) els.search.value = urlFilters.search;
 
     await runFilters();
 
-    if (urlMunicipio && lastFiltered.length) {
+    if (urlFilters.municipio && lastFiltered.length) {
       const first = lastFiltered[0];
       map.setView([first.lat, first.lon], 13);
     }
   } catch (err) {
-    els.resultCount.textContent = "Error al cargar datos";
+    els.resultCount.textContent = "";
     console.error(err);
+    showError("No se pudieron cargar los datos iniciales.", bootstrap);
   } finally {
     setLoading(false);
   }
@@ -409,12 +568,15 @@ async function bootstrap() {
 
 // Centers the map on the user's location on first load, if they grant
 // permission; silently keeps the nationwide default view otherwise. Skipped
-// when a ?municipio= link already asked for a specific city.
+// when the URL already asked for a specific filtered view (e.g. a
+// ?municipio= link), to respect that instead of overriding it.
 function tryInitialGeolocate() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      map.setView([pos.coords.latitude, pos.coords.longitude], 13);
+      lastGeoPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      map.setView([lastGeoPos.lat, lastGeoPos.lon], 13);
+      updateNearestBox();
     },
     () => {},
     { timeout: 8000 }
@@ -427,7 +589,7 @@ function main() {
   clusterGroup = initialized.clusterGroup;
   map.on("moveend", () => updateCheapestBox());
   wireEvents();
-  if (!readUrlMunicipio()) tryInitialGeolocate();
+  if (!hasUrlFilters()) tryInitialGeolocate();
   bootstrap();
 }
 
