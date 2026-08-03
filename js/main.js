@@ -4,6 +4,7 @@ import {
   normalizeStationForProduct,
   fetchStationsByProvincia,
   normalizeFullStation,
+  fetchHistoricalStationsByProduct,
   NON_LAND_PRODUCT_IDS,
 } from "./api.js";
 import { initMap, renderStations, buildPopupHtml, getStationMarker } from "./map.js";
@@ -16,7 +17,15 @@ import {
   readFilters,
   applyFilters,
 } from "./filters.js";
-import { debounce, escapeHtml, formatPrice } from "./utils.js";
+import {
+  debounce,
+  escapeHtml,
+  formatPrice,
+  formatDateDDMMYYYY,
+  parseEsNumber,
+  runWithConcurrency,
+} from "./utils.js";
+import { renderPriceHistoryChart } from "./chart.js";
 
 const els = {
   fuel: document.getElementById("f-fuel"),
@@ -38,6 +47,12 @@ const els = {
   refreshBtn: document.getElementById("refresh-btn"),
   loadingOverlay: document.getElementById("loading-overlay"),
   sidebar: document.getElementById("sidebar"),
+  historyToggle: document.getElementById("history-toggle"),
+  historyPanel: document.getElementById("history-panel"),
+  historyRange7: document.getElementById("history-range-7"),
+  historyRange30: document.getElementById("history-range-30"),
+  historyChart: document.getElementById("history-chart"),
+  historyStatus: document.getElementById("history-status"),
 };
 
 let productos = [];
@@ -62,6 +77,13 @@ let map = null;
 let clusterGroup = null;
 let lastFiltered = [];
 let lastFuelId = "";
+
+// Historical average-price chart state. Cached per "fuelId:rangeDays" so
+// toggling the range back and forth, or reopening the panel, doesn't refetch.
+const HISTORY_CONCURRENCY = 6;
+const historyCache = new Map();
+let historyRangeDays = 7;
+let historyPanelOpen = false;
 
 function setLoading(isLoading) {
   els.loadingOverlay.classList.toggle("hidden", !isLoading);
@@ -132,6 +154,64 @@ function ensureProvinceLoaded(idProvincia) {
 
   provinceLoadPromises.set(idProvincia, promise);
   return promise;
+}
+
+// Fetches one day's nationwide average price for a fuel (undocumented
+// EstacionesTerrestresHist endpoint — archive only covers up to yesterday,
+// today isn't finalized yet).
+async function fetchDailyAverage(fuelId, date) {
+  const res = await fetchHistoricalStationsByProduct(formatDateDDMMYYYY(date), fuelId);
+  const prices = res.ListaEESSPrecio.map((raw) => parseEsNumber(raw.PrecioProducto)).filter(
+    (p) => p != null
+  );
+  const avg = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
+  return { date, avg };
+}
+
+// Fetches the last `rangeDays` days (ending yesterday) of nationwide average
+// price for a fuel, in parallel with bounded concurrency. Cached per
+// fuel+range so switching back and forth is instant after the first fetch.
+function loadPriceHistory(fuelId, rangeDays) {
+  const cacheKey = `${fuelId}:${rangeDays}`;
+  if (historyCache.has(cacheKey)) return historyCache.get(cacheKey);
+
+  const promise = (async () => {
+    const days = Array.from({ length: rangeDays }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - 1 - (rangeDays - 1 - i));
+      return d;
+    });
+
+    const points = new Array(days.length);
+    await runWithConcurrency(days, HISTORY_CONCURRENCY, async (day, idx) => {
+      try {
+        points[idx] = await fetchDailyAverage(fuelId, day);
+      } catch (err) {
+        console.error(`Fallo al cargar histórico de ${formatDateDDMMYYYY(day)}:`, err);
+        points[idx] = { date: day, avg: null };
+      }
+    });
+    return points;
+  })();
+
+  historyCache.set(cacheKey, promise);
+  return promise;
+}
+
+async function refreshHistoryChart() {
+  if (!historyPanelOpen) return;
+  const fuelId = els.fuel.value;
+  if (!fuelId) return;
+
+  els.historyStatus.textContent = "Cargando histórico…";
+  try {
+    const points = await loadPriceHistory(fuelId, historyRangeDays);
+    renderPriceHistoryChart(els.historyChart, points);
+    els.historyStatus.textContent = "";
+  } catch (err) {
+    els.historyStatus.textContent = "No se pudo cargar el histórico.";
+    console.error(err);
+  }
 }
 
 function getStationStatus(station) {
@@ -223,7 +303,10 @@ function updateCheapestBox() {
 }
 
 function wireEvents() {
-  els.fuel.addEventListener("change", runFilters);
+  els.fuel.addEventListener("change", () => {
+    runFilters();
+    refreshHistoryChart();
+  });
 
   els.ccaa.addEventListener("change", () => {
     populateProvinciaSelect(els.provincia, provinciasList, els.ccaa.value);
@@ -269,6 +352,22 @@ function wireEvents() {
     loadedProductIds.clear();
     runFilters();
   });
+
+  els.historyToggle.addEventListener("click", () => {
+    historyPanelOpen = !historyPanelOpen;
+    els.historyPanel.classList.toggle("hidden", !historyPanelOpen);
+    els.historyToggle.setAttribute("aria-expanded", String(historyPanelOpen));
+    if (historyPanelOpen) refreshHistoryChart();
+  });
+
+  const setHistoryRange = (days) => {
+    historyRangeDays = days;
+    els.historyRange7.classList.toggle("active", days === 7);
+    els.historyRange30.classList.toggle("active", days === 30);
+    refreshHistoryChart();
+  };
+  els.historyRange7.addEventListener("click", () => setHistoryRange(7));
+  els.historyRange30.addEventListener("click", () => setHistoryRange(30));
 }
 
 // Reads ?municipio=Madrid from the URL — lets the "Gasolina barata en <ciudad>"

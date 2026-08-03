@@ -177,6 +177,22 @@
           <div id="legend-scale"></div>
           <div id="legend-labels"><span id="legend-min"></span><span id="legend-max"></span></div>
         </div>
+
+        <div class="filter-group">
+          <button id="history-toggle" class="btn-secondary" aria-expanded="false">
+            <span class="material-symbols-outlined">show_chart</span>
+            Histórico de precio medio
+          </button>
+        </div>
+
+        <div id="history-panel" class="filter-group hidden">
+          <div id="history-range">
+            <button id="history-range-7" class="pill active" type="button">7 días</button>
+            <button id="history-range-30" class="pill" type="button">30 días</button>
+          </div>
+          <svg id="history-chart" role="img" aria-label="Precio medio nacional en los últimos días"></svg>
+          <p id="history-status"></p>
+        </div>
       </aside>
 
       <main id="map-container">

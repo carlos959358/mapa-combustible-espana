@@ -42,6 +42,14 @@ export function fetchStationsByProvincia(idProvincia) {
   return getJson(`/EstacionesTerrestres/FiltroProvincia/${idProvincia}`);
 }
 
+// Historical (undocumented but stable, verified live back to 2020) snapshot
+// of one fuel's nationwide station list on a given day. Same shape as
+// fetchStationsByProduct, one request per day — used to build the "average
+// price over the last N days" chart.
+export function fetchHistoricalStationsByProduct(ddMmYyyy, productId) {
+  return getJson(`/EstacionesTerrestresHist/FiltroProducto/${ddMmYyyy}/${productId}`);
+}
+
 // The ProductosPetroliferos catalog names don't match the "Precio <Nombre>"
 // field names used by the unfiltered/region-scoped endpoints (accents and
 // wording differ, e.g. catalog "Gasóleo A habitual" vs field "Precio Gasoleo

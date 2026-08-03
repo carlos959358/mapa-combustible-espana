@@ -266,6 +266,56 @@ button {
   margin-top: 6px;
 }
 
+#history-panel.hidden { display: none; }
+
+#history-range {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.pill {
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  border: 1px solid var(--ghost-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-low);
+  color: var(--color-on-surface-variant);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.pill:hover { background: var(--color-surface-high); }
+.pill.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+#history-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+#history-chart .chart-axis-label {
+  font-family: var(--font-label);
+  font-size: 9px;
+  fill: var(--color-outline);
+}
+#history-chart .chart-empty {
+  font-family: var(--font-body);
+  font-size: 11px;
+  fill: var(--color-outline);
+}
+
+#history-status {
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  color: var(--color-outline);
+  margin: 6px 0 0;
+  min-height: 1em;
+}
+
 #map-container {
   position: relative;
   flex: 1 1 auto;
