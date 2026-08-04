@@ -1,0 +1,22 @@
+name: ✨ Mejora / funcionalidad
+description: Proponer una mejora o nueva funcionalidad
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: Qué limitación o carencia actual motiva esta propuesta
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solución propuesta
+      description: Cómo te imaginas que funcionaría
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas

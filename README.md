@@ -45,3 +45,15 @@ y abrir `http://localhost:8000`.
 ## Despliegue
 
 Sitio estático publicado en GitHub Pages (`.nojekyll`, `robots.txt` y `sitemap.xml` incluidos).
+
+## Contribuir
+
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) y el [Código de conducta](CODE_OF_CONDUCT.md).
+
+## Seguridad
+
+Ver [SECURITY.md](SECURITY.md) para reportar vulnerabilidades.
+
+## Licencia
+
+[MIT](LICENSE)

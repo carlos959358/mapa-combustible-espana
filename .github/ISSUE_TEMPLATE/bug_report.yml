@@ -1,0 +1,38 @@
+name: 🐛 Bug
+description: Reportar un fallo en el mapa
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del problema
+      description: Qué esperabas que pasara y qué pasó realmente
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. Ir a...
+        2. Filtrar por...
+        3. Ver error
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: URL donde ocurre (si aplica)
+      placeholder: https://carlos959358.github.io/mapa-combustible-espana/?municipio=...
+  - type: input
+    id: browser
+    attributes:
+      label: Navegador y dispositivo
+      placeholder: Chrome 126, Android
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Capturas de pantalla / consola
+      description: Adjunta imágenes o el error de la consola del navegador si lo hay
